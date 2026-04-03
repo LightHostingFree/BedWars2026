@@ -379,6 +379,8 @@ public class GameManager {
         if (arena.getLobbyLocation() == null)
             return;
 
+        arena.getSavedLobbyBlocks().clear();
+
         if (arena.getLobbyPos1() != null && arena.getLobbyPos2() != null) {
             Location l1 = arena.getLobbyPos1();
             Location l2 = arena.getLobbyPos2();
@@ -393,11 +395,14 @@ public class GameManager {
             int minZ = Math.min(l1.getBlockZ(), l2.getBlockZ());
             int maxZ = Math.max(l1.getBlockZ(), l2.getBlockZ());
 
+            String worldName = l1.getWorld().getName();
             for (int x = minX; x <= maxX; x++) {
                 for (int y = minY; y <= maxY; y++) {
                     for (int z = minZ; z <= maxZ; z++) {
                         org.bukkit.block.Block block = l1.getWorld().getBlockAt(x, y, z);
                         if (block.getType() != org.bukkit.Material.AIR) {
+                            arena.getSavedLobbyBlocks().put(worldName + "::" + x + "::" + y + "::" + z,
+                                    block.getBlockData().getAsString());
                             block.setType(org.bukkit.Material.AIR);
                         }
                     }
@@ -408,17 +413,59 @@ public class GameManager {
 
         int radius = plugin.getConfig().getInt("game.waiting-lobby-radius", 10);
         Location center = arena.getLobbyLocation();
+        String worldName = center.getWorld().getName();
 
         for (int x = -radius; x <= radius; x++) {
             for (int y = -radius; y <= radius; y++) {
                 for (int z = -radius; z <= radius; z++) {
                     Location loc = center.clone().add(x, y, z);
                     if (loc.getBlock().getType() != org.bukkit.Material.AIR) {
+                        int bx = center.getBlockX() + x;
+                        int by = center.getBlockY() + y;
+                        int bz = center.getBlockZ() + z;
+                        arena.getSavedLobbyBlocks().put(worldName + "::" + bx + "::" + by + "::" + bz,
+                                loc.getBlock().getBlockData().getAsString());
                         loc.getBlock().setType(org.bukkit.Material.AIR);
                     }
                 }
             }
         }
+    }
+
+    private void restoreLobbyStructure(Arena arena) {
+        java.util.Map<String, String> saved = arena.getSavedLobbyBlocks();
+        if (saved.isEmpty())
+            return;
+
+        for (java.util.Map.Entry<String, String> entry : saved.entrySet()) {
+            String key = entry.getKey();
+            String[] parts = key.split("::");
+            if (parts.length != 4) {
+                plugin.getLogger().warning("[" + arena.getName() + "] Skipping malformed lobby block key: " + key);
+                continue;
+            }
+            String worldName = parts[0];
+            int x, y, z;
+            try {
+                x = Integer.parseInt(parts[1]);
+                y = Integer.parseInt(parts[2]);
+                z = Integer.parseInt(parts[3]);
+            } catch (NumberFormatException e) {
+                plugin.getLogger().warning("[" + arena.getName() + "] Skipping lobby block with invalid coordinates: " + key);
+                continue;
+            }
+
+            org.bukkit.World world = org.bukkit.Bukkit.getWorld(worldName);
+            if (world != null) {
+                try {
+                    org.bukkit.block.data.BlockData data = org.bukkit.Bukkit.createBlockData(entry.getValue());
+                    world.getBlockAt(x, y, z).setBlockData(data);
+                } catch (Exception e) {
+                    plugin.getLogger().warning("[" + arena.getName() + "] Failed to restore lobby block at " + key + ": " + e.getMessage());
+                }
+            }
+        }
+        saved.clear();
     }
 
     private void assignTeams(Arena arena) {
@@ -1531,6 +1578,7 @@ public class GameManager {
                                     } else if (attempts >= 5) {
                                         plugin.getLogger().severe("Failed to unload world " + worldName + " after "
                                                 + attempts + " attempts. Arena reset may fail!");
+                                        restoreLobbyStructure(arena);
                                         arena.setResetting(false);
                                         this.cancel();
                                         plugin.getSignManager().updateSigns(arena);
@@ -1549,6 +1597,7 @@ public class GameManager {
                             if (loadedWorld != null) {
                                 loadedWorld.setAutoSave(false);
                                 updateArenaLocations(arena, loadedWorld);
+                                restoreLobbyStructure(arena);
                                 arena.setResetting(false);
                                 plugin.getSignManager().updateSigns(arena);
                                 plugin.getLogger().info("Arena " + arena.getName() + " world loaded successfully.");
@@ -1810,6 +1859,7 @@ public class GameManager {
                     plugin.getLogger().warning(
                             "World " + worldName + " is still loaded, cannot reload. Trying to update references...");
                     updateArenaLocations(arena, existingWorld);
+                    restoreLobbyStructure(arena);
                     arena.setResetting(false);
                     plugin.getSignManager().updateSigns(arena);
                     return;
@@ -1839,6 +1889,7 @@ public class GameManager {
                     prepareWorldRules(reloadedWorld);
 
                     updateArenaLocations(arena, reloadedWorld);
+                    restoreLobbyStructure(arena);
 
                     if (arena.getLobbyLocation() == null || arena.getLobbyLocation().getWorld() == null) {
                         plugin.getLogger()

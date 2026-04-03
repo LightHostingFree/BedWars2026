@@ -44,6 +44,13 @@ public class ScoreboardManager {
 
     public void updateScoreboard(Player player) {
         Arena arena = plugin.getArenaManager().getPlayerArena(player);
+        Arena editArena = plugin.getArenaManager().getEditArena(player);
+
+        // Only show BedWars scoreboard to players in a BedWars arena world
+        if (arena == null && editArena == null && !isInBedWarsWorld(player)) {
+            removeScoreboard(player);
+            return;
+        }
 
         Scoreboard board = boards.computeIfAbsent(player.getUniqueId(),
                 uuid -> Bukkit.getScoreboardManager().getNewScoreboard());
@@ -57,7 +64,6 @@ public class ScoreboardManager {
         }
 
         List<String> linesTemplate;
-        Arena editArena = plugin.getArenaManager().getEditArena(player);
 
         if (arena == null) {
             if (editArena != null) {
@@ -256,6 +262,20 @@ public class ScoreboardManager {
             statusLines.add(color(line));
         }
         return statusLines;
+    }
+
+    private boolean isInBedWarsWorld(Player player) {
+        String worldName = player.getWorld().getName();
+        return plugin.getArenaManager().getArenas().stream()
+                .anyMatch(a -> worldName.equals(a.getWorldName()));
+    }
+
+    public void removeScoreboard(Player player) {
+        if (boards.containsKey(player.getUniqueId())) {
+            player.setScoreboard(Bukkit.getScoreboardManager().getMainScoreboard());
+            boards.remove(player.getUniqueId());
+            lastLines.remove(player.getUniqueId());
+        }
     }
 
     private String color(String text) {
