@@ -128,7 +128,6 @@ public class Arena {
         soloTest = false;
         resetting = false;
         placedBlocks.clear();
-        savedLobbyBlocks.clear();
         players.clear();
 
         for (Team team : teams) {
