@@ -103,6 +103,11 @@ public class Arena {
     private int emeraldCooldown = 0;
     private boolean soloTest = false;
     private final java.util.Set<Location> placedBlocks = new java.util.HashSet<>();
+    private final java.util.Map<String, String> savedLobbyBlocks = new java.util.HashMap<>();
+
+    public java.util.Map<String, String> getSavedLobbyBlocks() {
+        return savedLobbyBlocks;
+    }
 
     private final List<Location> joinSigns = new ArrayList<>();
 
@@ -123,6 +128,7 @@ public class Arena {
         soloTest = false;
         resetting = false;
         placedBlocks.clear();
+        savedLobbyBlocks.clear();
         players.clear();
 
         for (Team team : teams) {
